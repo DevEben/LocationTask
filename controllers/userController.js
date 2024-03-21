@@ -288,79 +288,105 @@ const LocationData = async (req, res) => {
                 message: error.details[0].message
             })
         } else {
-        const userId = req.user.userId;
-        const user = await userModel.findById(userId);
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found",
-            })
-        }
-        const location = req.body.location.toLowerCase();
-        if (!location) {
-            return res.status(400).json({
-                message: "Please enter a valid location"
-            })
-        }
-
-        const image = req.files.image;
-
-        // Check if only one file is uploaded
-        if (image.length > 1) {
-            return res.status(400).json({
-                message: "Please upload only one image file",
-            });
-        }
-
-        if (!req.files || !req.files.image) {
-            return res.status(400).json({
-                message: 'No logo image provided'
-            });
-        }
-
-        const fileExtension = path.extname(image.name).toLowerCase();
-        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif'];
-
-        if (!allowedExtensions.includes(fileExtension)) {
-            return res.status(400).json({
-                message: 'Only image files are allowed.'
-            });
-        }
-
-        const fileUploader = await cloudinary.uploader.upload(req.files.image.tempFilePath, { folder: "Data-Image" } )
-
-                // Delete the temporary file
-                fs.unlinkSync(req.files.image.tempFilePath);
-
-        const today = new Date()
-        const time = today.toLocaleTimeString('en-US', { hour12: true });
-
-        const checkDate = await dataModel.findOne({ date: today.toLocaleDateString() })
-        if (checkDate) {
-            return res.status(400).json({
-                message: "User already enter data for today"
-            })
-        }
-
-        const userData = new dataModel({
-            userId: userId,
-            location,
-            time: time,
-            date: today.toLocaleDateString(),
-            image: {
-                public_id: fileUploader.public_id,
-                url: fileUploader.secure_url
+            const userId = req.user.userId;
+            const user = await userModel.findById(userId);
+            if (!user) {
+                return res.status(404).json({
+                    message: "User not found",
+                })
             }
-        });
+            const location = req.body.location.toLowerCase();
+            if (!location) {
+                return res.status(400).json({
+                    message: "Please enter a valid location"
+                })
+            }
 
-        await userData.save();
-        user.data.push(userData);
-        await user.save();
+            let userData;
 
-        return res.status(200).json({
-            message: 'User data created successfully',
-            Post: userData
-        })
-    }
+            //Check if the user has already uploaded an image before
+            const checkImage = await dataModel.findOne({userId});
+            if (checkImage && checkImage.image) {
+                const today = new Date()
+                const time = today.toLocaleTimeString('en-US', { hour12: true });
+    
+                const checkDate = await dataModel.findOne({ date: today.toLocaleDateString() })
+                if (checkDate) {
+                    return res.status(400).json({
+                        message: "User already enter data for today"
+                    })
+                }
+    
+                userData = new dataModel({
+                    userId: userId,
+                    location,
+                    time: time,
+                    date: today.toLocaleDateString(),
+                });
+
+            } else {
+
+            // If the user hasn't uploaded an image before, it upload and save the location too
+                const image = req.files.image;
+
+                // Check if only one file is uploaded
+                if (image.length > 1) {
+                    return res.status(400).json({
+                        message: "Please upload only one image file",
+                    });
+                }
+
+                if (!req.files || !req.files.image) {
+                    return res.status(400).json({
+                        message: 'No logo image provided'
+                    });
+                }
+
+                const fileExtension = path.extname(image.name).toLowerCase();
+                const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif'];
+
+                if (!allowedExtensions.includes(fileExtension)) {
+                    return res.status(400).json({
+                        message: 'Only image files are allowed.'
+                    });
+                }
+
+            const fileUploader = await cloudinary.uploader.upload(req.files.image.tempFilePath, { folder: "Data-Image" })
+
+            // Delete the temporary file
+            fs.unlinkSync(req.files.image.tempFilePath);
+
+            const today = new Date()
+            const time = today.toLocaleTimeString('en-US', { hour12: true });
+
+            const checkDate = await dataModel.findOne({ date: today.toLocaleDateString() })
+            if (checkDate) {
+                return res.status(400).json({
+                    message: "User already enter data for today"
+                })
+            }
+
+            userData = new dataModel({
+                userId: userId,
+                location,
+                time: time,
+                date: today.toLocaleDateString(),
+                image: {
+                    public_id: fileUploader.public_id,
+                    url: fileUploader.secure_url
+                }
+            });
+        }
+
+            await userData.save();
+            user.data.push(userData);
+            await user.save();
+
+            return res.status(200).json({
+                message: 'User data created successfully',
+                Data: userData
+            })
+        }
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error: ' + error.message,
